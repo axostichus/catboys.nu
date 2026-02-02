@@ -22,7 +22,9 @@ git clone --depth 1 "$REPO" "$TMP_DIR"
 cd "$TMP_DIR"
 
 echo "Building catboy..."
-bun build ./cli/index.js --compile --outfile catboy
+cd cli
+bun install
+bun build ./index.js --compile --outfile catboy
 
 if [[ ! -x ./catboy ]]; then
   echo "Error: Build failed" >&2
