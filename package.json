@@ -8,7 +8,7 @@
     "prisma": "^7.3.0"
   },
   "scripts": {
-    "start": "bun x prisma db push && bun ."
+    "start": "bun x prisma db push && bun x prisma generate && bun ."
   },
   "peerDependencies": {
     "typescript": "^5"
