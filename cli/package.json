@@ -1,0 +1,19 @@
+{
+  "name": "axe",
+  "type": "module",
+  "bin": {
+    "files": "./index.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "private": true,
+  "dependencies": {
+    "commander": "^14.0.3",
+    "libsodium-wrappers-sumo": "^0.8.2",
+    "webdav-server": "^2.6.2"
+  }
+}

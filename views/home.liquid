@@ -1,0 +1,35 @@
+{% layout 'parent.liquid' %}
+
+{% block body -%}
+<p>
+  <b>catboys.nu</b> is a zero-knowledge encrypted file storage system. Files are encrypted entirely on the client before
+  being uploaded, meaning the server never has access to your plaintext data or encryption keys. The system is designed
+  around a hierarchical key derivation scheme, chunked file storage, and an encrypted operation log that enables
+  conflict-resistant multi-device synchronization.
+</p>
+<p>
+  It is in its early days. You probably shouldn't use this in production, as files may be lost and the public database
+  will be reset quite a lot.
+</p>
+
+<h2>Install</h2>
+
+<pre class="language-bash"><code>curl https://catboys.nu/install.sh &gt; /tmp/catboys.sh
+cat /tmp/catboys.sh | less
+
+# After reviewing it
+cat /tmp/catboys.sh | bash
+
+# To register
+catboys register
+</code></pre>
+<br>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/bash.min.js"></script>
+
+<script>
+  hljs.highlightAll();
+</script>
+{%- endblock %}

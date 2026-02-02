@@ -1,0 +1,299 @@
+{% layout 'parent.liquid' %}
+
+{% block body -%}
+<h2>Architecture Overview</h2>
+
+<p>
+  <b>catboys.nu</b> is a zero-knowledge encrypted file storage system. Files are encrypted entirely on the client before being uploaded, meaning the server never has access to your plaintext data or encryption keys. The system is designed around a hierarchical key derivation scheme, chunked file storage, and an encrypted operation log that enables conflict-resistant multi-device synchronization.
+</p>
+
+<h3>System Overview</h3>
+
+<p>
+  The architecture consists of three main components: the CLI client, a local SQLite cache for metadata, and a remote API backed by S3-compatible object storage. All cryptographic operations happen client-side using <a href="https://doc.libsodium.org/">libsodium</a>, providing end-to-end encryption.
+</p>
+
+<code class="mermaid">
+flowchart TB
+    subgraph Client["Client (CLI)"]
+        CLI[CLI Commands]
+        Crypto[Crypto Layer]
+        LocalDB[(SQLite Cache)]
+        Keychain[System Keychain]
+    end
+    
+    subgraph Server["Server"]
+        API[REST API]
+        S3[(S3 Storage)]
+        DB[(PostgreSQL)]
+        OpLog[(Operation Log)]
+    end
+    
+    CLI --> Crypto
+    CLI --> LocalDB
+    CLI --> Keychain
+    Crypto --> API
+    API --> S3
+    API --> DB
+    API --> OpLog
+</code>
+
+<h3>Cryptographic Architecture</h3>
+
+<p>
+  The encryption scheme uses a hierarchical key derivation model. Starting from a user-provided password, keys are derived at multiple levels to enable fine-grained access control and secure key rotation.
+</p>
+
+<code class="mermaid">
+flowchart TD
+    Password[Password] --> |Argon2id + Salt| MasterKey[Master Key]
+    MasterKey --> |KDF context: kek_ctx_| KEK[Key Encryption Key]
+    KEK --> |XChaCha20-Poly1305| EncryptedDataKey[Encrypted Data Key]
+    EncryptedDataKey --> |Decrypt| DataKey[Data Key]
+    DataKey --> |BLAKE2b + Vault ID| VaultKey[Vault Key]
+    VaultKey --> |BLAKE2b + File ID| FileKey[File Key]
+    FileKey --> |XChaCha20-Poly1305| EncryptedChunks[Encrypted Chunks]
+    KEK --> |KDF context: ops_ctx_| OpKey[Operation Key]
+    OpKey --> |XChaCha20-Poly1305| EncryptedOps[Encrypted Operations]
+</code>
+
+<p>
+  <b>Password to Master Key:</b> The user's password is processed through Argon2id, a memory-hard key derivation function resistant to GPU and ASIC attacks. A random 16-byte salt is generated during registration and must be codeserved for future logins. The derivation uses SENSITIVE CPU and memory parameters.
+</p>
+<blockquote>
+  For highly sensitive data and non-interactive operations, crypto_pwhash_OPSLIMIT_SENSITIVE and crypto_pwhash_MEMLIMIT_SENSITIVE can be used. With these parameters, deriving a key takes about 3.5 seconds on a 2.8 GHz Core i7 CPU and requires 1024 MiB of dedicated RAM. — <a href="https://doc.libsodium.org/doc/password_hashing/default_phf">https://doc.libsodium.org/doc/password_hashing/default_phf</a>
+  </blockquote>
+<p>
+  <b>Key Encryption Key (KEK):</b> The master key is used to derive a KEK using libsodium's key derivation function with a unique context string. This KEK is used to encrypt the Data Key and is stored securely in the system keychain, never transmitted to the server.
+</p>
+
+<p>
+  <b>Data Key:</b> A randomly generated 32-byte key that serves as the root for all file encryption. The Data Key is encrypted with the KEK and stored in the local database. This separation allows password changes without re-encrypting all files: when you change your password, only the Data Key's encryption is updated, while the underlying Data Key value remains the same.
+</p>
+
+<p>
+  <b>Vault and File Keys:</b> Each vault has a unique random ID, and the vault key is derived by hashing the vault ID with the Data Key using BLAKE2b. Similarly, each file within a vault has its own key derived from the vault key and file ID. This hierarchical structure means that file keys are deterministically reproducible from just the password and the file's metadata.
+</p>
+
+<p>
+  <b>Chunk Encryption:</b> Files are split into 8 MB chunks and each chunk is encrypted using XChaCha20-Poly1305-IETF with authenticated encryption. Each chunk uses a random 24-byte nonce, and the chunk index is included as additional authenticated data (AAD) to codevent chunk reordering attacks.
+</p>
+
+<h3>Local Cache</h3>
+
+<p>
+  The client maintains a local SQLite database at <code>~/.encrypted-files/cache.sqlite</code> that caches all file metadata, vault information, and chunk references. This cache enables the client to know which files exist, their paths within vaults, and how to reassemble them from chunks without querying the server for every operation. The cache can be fully rebuilt from the server's operation log at any time.
+</p>
+
+<code class="mermaid">
+erDiagram
+    VAULTS {
+        text id PK
+        text name UK
+        text createdAt
+    }
+    FILES {
+        text id PK
+        text vaultId FK
+        text path
+        int size
+        text mime
+        text hash
+        text createdAt
+        text updatedAt
+    }
+    CHUNKS {
+        text id PK
+        text fileId FK
+        int chunkIndex
+        blob nonce
+        int size
+    }
+    PENDING_OPS {
+        int id PK
+        text op
+        text createdAt
+    }
+    META {
+        text key PK
+        text value
+    }
+    
+    VAULTS ||--o{ FILES : contains
+    FILES ||--o{ CHUNKS : "split into"
+</code>
+
+<p>
+  Sensitive credentials (account token, KEK, and salt) are stored in the operating system's secure keychain rather than in the database file. This provides an additional layer of protection against credential theft if the database file is compromised.
+</p>
+
+<p>
+  The <code>PENDING_OPS</code> table stores operations that have been performed locally but not yet pushed to the server. This enables offline operation: you can create vaults, upload files, and make changes without network connectivity, and they will be synchronized when you're back online.
+</p>
+
+<h3>Operation Log Synchronization</h3>
+
+<p>
+  Instead of synchronizing the entire database state, the system uses an append-only operation log. Each action (create vault, upload file, delete file) generates an encrypted operation that is pushed to the server.
+</p>
+
+<
+
+<code class="mermaid">
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: GET /index/version
+    Server-->>Client: { version: N, compactedUpTo: M }
+    
+    alt Server has new operations
+        Client->>Server: GET /ops?since=localVersion
+        Server-->>Client: { ops: [encrypted ops...] }
+        Client->>Client: Decrypt and apply each op to cache
+    end
+    
+    alt Client has pending operations
+        Client->>Client: Encrypt pending ops
+        Client->>Server: POST /ops { ops: [encrypted ops...] }
+        Server-->>Client: { latestVersion: N+K }
+        Client->>Client: Clear pending ops, update version
+    end
+    
+    alt Too many operations (compaction)
+        Client->>Client: Build snapshot of current state
+        Client->>Client: Encrypt snapshot as single op
+        Client->>Server: POST /ops/compact { snapshotOp, upToVersion }
+        Server->>Server: Delete old ops, store snapshot at version 0
+    end
+</code>
+
+<p>
+  <b>Operation Types:</b> The system supports five operation types, all encrypted before transmission:
+</p>
+
+<ul>
+  <li><code>create_vault</code> - Creates a new vault with ID, name, and timestamp</li>
+  <li><code>delete_vault</code> - Removes a vault by ID</li>
+  <li><code>create_file</code> - Adds a file with all its metadata and chunk references</li>
+  <li><code>delete_file</code> - Removes a file by ID</li>
+  <li><code>rename_file</code> - Changes a file's path within its vault</li>
+  <li><code>snapshot</code> - A compacted state containing all vaults, files, and chunks</li>
+</ul>
+
+<p>
+  <b>Compaction:</b> To prevent unbounded growth of the operation log, the client periodically compacts operations into a snapshot. When the operation count exceeds a threshold (currently 100), the client builds a snapshot of the current state and sends it to the server. The server replaces all old operations with this single snapshot, reducing storage and sync overhead.
+</p>
+
+<p>
+  All operations are encrypted with a key derived from the KEK, so the server cannot read file paths, sizes, vault names, or any other metadata. The server only sees opaque encrypted blobs with version numbers.
+</p>
+
+<h3>File Upload Flow</h3>
+
+<p>
+  When uploading a file, the client performs all encryption locally before any data leaves the machine. The file is chunked, each chunk is encrypted with a unique nonce, and then chunks are uploaded in parallel using presigned S3 URLs for maximum throughput. An encrypted operation is then pushed to record the file creation.
+</p>
+
+<code class="mermaid">
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Crypto
+    participant Server
+    participant S3
+    
+    User->>CLI: upload vault key file.txt
+    CLI->>CLI: Read file from disk
+    CLI->>Crypto: Derive file key from vault key + file ID
+    CLI->>Crypto: Split into 8MB chunks
+    
+    loop For each chunk
+        CLI->>Crypto: Encrypt chunk with XChaCha20-Poly1305
+    end
+    
+    CLI->>Server: Request presigned upload URLs
+    Server-->>CLI: { chunks: [{ id, url }, ...] }
+    
+    par Parallel uploads
+        CLI->>S3: PUT chunk data to presigned URL
+    end
+    
+    CLI->>Server: Update chunk sizes
+    CLI->>CLI: Update local cache
+    CLI->>Crypto: Encrypt create_file operation
+    CLI->>Server: POST /ops with encrypted operation
+</code>
+
+<h3>File Download Flow</h3>
+
+<p>
+  Downloading reverses the process: the client fetches chunk metadata from its local cache, downloads encrypted chunks in parallel from S3, decrypts each chunk, and reassembles the original file.
+</p>
+
+<code class="mermaid">
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Crypto
+    participant Server
+    participant S3
+    
+    User->>CLI: download vault key output.txt
+    CLI->>CLI: Look up file in local cache
+    CLI->>CLI: Get chunk IDs and nonces
+    CLI->>Crypto: Derive file key
+    
+    CLI->>Server: Request presigned download URLs
+    Server-->>CLI: { urls: { chunkId: url, ... } }
+    
+    par Parallel downloads
+        CLI->>S3: GET encrypted chunk
+    end
+    
+    loop For each chunk
+        CLI->>Crypto: Decrypt with nonce and chunk index
+    end
+    
+    CLI->>CLI: Reassemble and write to disk
+    CLI-->>User: File saved to output.txt
+</code>
+
+<h3>Multi-Device Setup</h3>
+
+<p>
+  To use catboys.nu on multiple devices, you can export your credentials to a file and import them on another device:
+</p>
+
+<code class="mermaid">
+sequenceDiagram
+    participant Device1
+    participant ExportFile
+    participant Device2
+    participant Server
+    
+    Device1->>Device1: Verify password
+    Device1->>ExportFile: Write { accountNumber, salt, encryptedDataKey }
+    
+    ExportFile->>Device2: Transfer file (any method)
+    
+    Device2->>Device2: Prompt for password
+    Device2->>Device2: Derive KEK from password + salt
+    Device2->>Device2: Verify KEK can decrypt data key
+    Device2->>Server: Login with account number
+    Server-->>Device2: New API token
+    Device2->>Server: GET /ops?since=0
+    Server-->>Device2: All encrypted operations
+    Device2->>Device2: Decrypt and apply ops to build cache
+    Device2-->>Device2: Ready to use
+</code>
+
+<p>
+  The export file contains your account number, salt, and encrypted data key. It does not contain your password or any plaintext keys. Without knowing the password, the export file is useless to an attacker.
+</p>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true });
+</script><br>
+{%- endblock %}

@@ -1,0 +1,58 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String          @id @unique @default(ulid())
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  active        Boolean         @default(true)
+  accountNumber String          @unique
+  chunks        Chunk[]
+  apiTokens     ApiToken[]
+  opLogs        OpLog[]
+  opLogMeta     OpLogMeta?
+}
+
+model Chunk {
+  id        String   @id @unique @default(ulid())
+  createdAt DateTime @default(now())
+  size      BigInt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model ApiToken {
+  id        String   @id @unique @default(ulid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model OpLog {
+  id        String   @id @unique @default(ulid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  version   Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@unique([userId, version])
+  @@index([userId, version])
+}
+
+model OpLogMeta {
+  id              String   @id @unique @default(ulid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  latestVersion   Int      @default(0)
+  compactedUpTo   Int      @default(0)
+  updatedAt       DateTime @updatedAt
+}
+

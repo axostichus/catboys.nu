@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <link rel="icon" href="data:,">
+    <title>catboys.nu - encrypted file hosting for cats!</title>
+    <meta name="title" content="catboys.nu - encrypted file hosting for cats!">
+    <meta name="description" content="stupid encrypted file hosting something">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://metatags.io/">
+    <meta property="og:title" content="catboys.nu - encrypted file hosting for cats!">
+    <meta property="og:description" content="stupid encrypted file hosting something">
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://metatags.io/">
+    <meta property="twitter:title" content="catboys.nu - encrypted file hosting for cats!">
+    <meta property="twitter:description" content="stupid encrypted file hosting something">
+    <meta property="twitter:image" content="https://metatags.io/images/meta-tags.png">
+
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🐈</text></svg>"
+    >
+
+    <style>
+      {{css | safe}}
+    </style>
+    {% block head %}
+    <h1 style="list-style: none; padding: 0; margin: 0; display: flex; gap: 1rem;" class="title">catboys.nu</h1>
+    <nav>
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; gap: 1rem; flex-wrap: wrap;">
+        <li>
+          <a href="/">Home</a> &bull;
+          <a href="/architecture">Architecture</a>
+        </li>
+      </ul>
+    </nav>
+  
+    {% endblock %}
+  </head>
+  <body>
+    <header>
+      {% block header -%}
+      {%- endblock %}
+    </header>
+    <main>
+      {% block body -%}
+      {%- endblock %}
+    </main>
+
+    <footer>
+      <div style="padding: 1rem 0.2px 0; color: #666; font-size: .9rem;">&copy; 2026 catboys.nu</div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "catboys.nu",
+  "module": "index.js",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prisma": "^7.3.0"
+  },
+  "scripts": {
+    "start": "bun x prisma db push && bun ."
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "^7.3.0",
+    "dotenv": "^17.2.3",
+    "hono": "^4.11.7",
+    "libsodium-wrappers": "^0.8.2",
+    "libsodium-wrappers-sumo": "^0.8.2",
+    "liquidjs": "^10.24.0",
+    "pg": "^8.18.0"
+  }
+}
