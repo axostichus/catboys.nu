@@ -31,6 +31,8 @@ if [[ ! -x ./catboy ]]; then
   exit 1
 fi
 
+chmod +x catboy
+
 mkdir -p "$INSTALL_DIR"
 if [[ -f "$INSTALL_DIR/catboy" ]]; then
   read -p "catboy already exists at $INSTALL_DIR/catboy. Replace? (y/N) " -n 1 -r

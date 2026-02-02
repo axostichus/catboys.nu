@@ -21,7 +21,12 @@ cat /tmp/catboys.sh | less
 cat /tmp/catboys.sh | bash
 
 # To register
-catboys register
+catboy register
+
+# Try to upload a few files
+bun . vault create home
+bun . upload home BigBuckBunny_320x180.mp4 ~/Downloads/BigBuckBunny_320x180.mp4
+bun . download home BigBuckBunny_320x180.mp4 ~/Downloads/BigBuckBunny.mp4
 </code></pre>
 <br>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/atom-one-dark.min.css">
